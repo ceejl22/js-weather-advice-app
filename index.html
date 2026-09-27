@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimal Weather & Advice App</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --accent: #38bdf8;
+      --muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    .app-card {
+      background-color: var(--card-bg);
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: var(--accent);
+    }
+
+    .search-box {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    input {
+      flex: 1;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--muted);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+    }
+
+    button {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      border: none;
+      background-color: var(--accent);
+      color: var(--bg);
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .weather-info {
+      margin-bottom: 1.5rem;
+    }
+
+    .temp {
+      font-size: 3rem;
+      font-weight: bold;
+      margin: 0.5rem 0;
+    }
+
+    .condition {
+      color: var(--muted);
+      text-transform: capitalize;
+    }
+
+    .advice-box {
+      border-top: 1px solid var(--muted);
+      padding-top: 1rem;
+      font-style: italic;
+      color: #cbd5e1;
+      font-size: 0.9rem;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-card">
+    <h1>City Weather & Advice</h1>
+
+    <div class="search-box">
+      <input type="text" id="cityInput" placeholder="Enter city (e.g., Tokyo)" value="Tokyo">
+      <button id="searchBtn">Search</button>
+    </div>
+
+    <div id="status" class="status">Loading data...</div>
+
+    <div id="result" class="hidden">
+      <div class="weather-info">
+        <h2 id="cityName">--</h2>
+        <div class="temp" id="temperature">--°C</div>
+        <div class="condition" id="weatherCondition">--</div>
+      </div>
+
+      <div class="advice-box">
+        💡 <span id="adviceText">Fetching wisdom...</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const searchBtn = document.getElementById('searchBtn');
+    const cityInput = document.getElementById('cityInput');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+
+    const cityNameEl = document.getElementById('cityName');
+    const tempEl = document.getElementById('temperature');
+    const conditionEl = document.getElementById('weatherCondition');
+    const adviceEl = document.getElementById('adviceText');
+
+
+    function parseWeatherCode(code) {
+      if (code === 0) return 'Clear sky';
+      if (code >= 1 && code <= 3) return 'Partly cloudy';
+      if (code >= 45 && code <= 48) return 'Foggy';
+      if (code >= 51 && code <= 67) return 'Rainy';
+      if (code >= 71 && code <= 77) return 'Snowy';
+      if (code >= 95) return 'Thunderstorm';
+      return 'Overcast';
+    }
+
+    async function fetchAppData() {
+      const city = cityInput.value.trim();
+      if (!city) return;
+
+      statusEl.textContent = 'Fetching data...';
+      statusEl.classList.remove('hidden');
+      resultEl.classList.add('hidden');
+
+      try {
+        
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+        const geoData = await geoRes.json();
+
+        if (!geoData.results || geoData.results.length === 0) {
+          throw new Error('City not found');
+        }
+
+        const { latitude, longitude, name, country } = geoData.results[0];
+
+
+        const weatherPromise = fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+
+        
+        const advicePromise = fetch('https://api.adviceslip.com/advice');
+
+        
+        const [weatherRes, adviceRes] = await Promise.all([weatherPromise, advicePromise]);
+
+        const weatherData = await weatherRes.json();
+        const adviceData = await adviceRes.json();
+
+        
+        cityNameEl.textContent = `${name}, ${country || ''}`;
+        tempEl.textContent = `${Math.round(weatherData.current_weather.temperature)}°C`;
+        conditionEl.textContent = parseWeatherCode(weatherData.current_weather.weathercode);
+        adviceEl.textContent = adviceData.slip ? adviceData.slip.advice : 'Have a great day!';
+
+        statusEl.classList.add('hidden');
+        resultEl.classList.remove('hidden');
+
+      } catch (err) {
+        statusEl.textContent = err.message || 'Error fetching data. Please try again.';
+      }
+    }
+
+    cityInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') fetchAppData();
+});
+
+    
+    fetchAppData();
+  </script>
+</body>
+</html>
